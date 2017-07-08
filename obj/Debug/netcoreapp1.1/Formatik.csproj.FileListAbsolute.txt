@@ -1,6 +1,0 @@
-c:\Projects\Formatik v0.1\Formatik\bin\Debug\netcoreapp1.1\Octagon.Formatik.deps.json
-c:\Projects\Formatik v0.1\Formatik\bin\Debug\netcoreapp1.1\Octagon.Formatik.dll
-c:\Projects\Formatik v0.1\Formatik\bin\Debug\netcoreapp1.1\Octagon.Formatik.pdb
-c:\Projects\Formatik v0.1\Formatik\obj\Debug\netcoreapp1.1\Formatik.AssemblyInfo.cs
-c:\Projects\Formatik v0.1\Formatik\obj\Debug\netcoreapp1.1\Octagon.Formatik.dll
-c:\Projects\Formatik v0.1\Formatik\obj\Debug\netcoreapp1.1\Octagon.Formatik.pdb
