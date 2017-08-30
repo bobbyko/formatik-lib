@@ -14,7 +14,7 @@ namespace Octagon.Formatik
         /// </summary>
         /// <param name="token"></param>
         /// <returns></returns>
-        IEnumerable<string> GetFieldSelectors(string token);
+        //IEnumerable<string> GetFieldSelectors(string token);
         IEnumerable<Token> GetTokens();
     }
 }

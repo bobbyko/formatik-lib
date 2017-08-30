@@ -11,6 +11,8 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Xml.Linq;
+using System.Xml.XPath;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -455,7 +457,7 @@ namespace Octagon.Formatik
                     if (deadends != null)
                     {
                         valueSetKey = string.Join("", valueSet.Distinct());
-                        
+
                         if (deadends.TryGetValue(valueSetKey, out var deadend) &&
                             deadend.Resedue == nextResedue &&
                             deadend.RecordSubset.Intersect(nextSortedRecordSubset).Count() == nextSortedRecordSubset.Length)
@@ -707,6 +709,19 @@ namespace Octagon.Formatik
                     FindRecordArray(prop.Value, ref largestArray);
         }
 
+        private static void FindRecordNode(XElement node, ref XElement largestNode)
+        {
+            if (node.Elements().Take(3).Count() == 3 &&
+                (largestNode == null || node.Elements().Count() > largestNode.Elements().Count()))
+            {
+                largestNode = node;
+            }
+            else
+                foreach (var child in node.Elements())
+                    FindRecordNode(child, ref largestNode);
+        }
+
+
         private IEnumerable<IInputRecord> GetRecords(int limit = 0)
         {
             // Classical valid JSON document
@@ -737,6 +752,20 @@ namespace Octagon.Formatik
 
                 return records
                     .Select((rec, i) => new JsonInputRecord((JObject)rec, i, lines))
+                    .Take(limit > 0 ? limit : int.MaxValue)
+                    .ToArray();
+            }
+            else if (Regex.IsMatch(Input, "^<\\?xml"))
+            {
+                InputFormat = InputFormat.XML;
+
+                var doc = XDocument.Parse(Input);
+
+                XElement recordsNode = null;
+                FindRecordNode(doc.Root, ref recordsNode);
+
+                return recordsNode.Elements()
+                    .Select((rec, i) => new XmlInputRecord(rec, i))
                     .Take(limit > 0 ? limit : int.MaxValue)
                     .ToArray();
             }
@@ -799,6 +828,71 @@ namespace Octagon.Formatik
             }
         }
 
+        private void ProcessJSON(Stream input, Stream output, Encoding encoding, int limit = 0)
+        {
+            var serializer = new JsonSerializer();
+            var lines = new List<string>();
+
+            using (var sr = new StreamReader(input, encoding, false, 1024, true))
+            {
+                var line = sr.ReadLine();
+                while (line != null && limit == 0 || lines.Count <= limit)
+                {
+                    lines.Add(line);
+                    line = sr.ReadLine();
+                }
+            }
+
+            input.Seek(0, SeekOrigin.Begin);
+
+            using (var sr = new StreamReader(input, encoding))
+            {
+                using (var jsonTextReader = new JsonTextReader(sr))
+                {
+                    JArray records;
+
+                    if (string.IsNullOrEmpty(RecordsArrayPath))
+                    {
+                        records = JArray.Load(jsonTextReader, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore });
+                    }
+                    else
+                    {
+                        var document = (JToken)JToken.Load(jsonTextReader, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore });
+                        records = string.IsNullOrEmpty(RecordsArrayPath) ?
+                            (JArray)document :
+                            (JArray)((JObject)document).SelectToken(RecordsArrayPath);
+                    }
+
+                    Process(
+                        records
+                            .Take(limit > 0 ? limit : int.MaxValue)
+                            .Select((jRecord, i) => new JsonInputRecord((JObject)jRecord, i, lines)),
+                        output,
+                        encoding);
+                }
+            }
+        }
+
+        private void ProcessXML(Stream input, Stream output, Encoding encoding, int limit = 0)
+        {
+            using (var reader = new StreamReader(input, encoding))
+            {
+                var document = XDocument.Load(reader);
+
+                var records = string.IsNullOrEmpty(RecordsArrayPath) ? 
+                    document.Root :
+                    document.Root.XPathSelectElement(RecordsArrayPath);
+
+                Process(
+                    records.Elements()
+                        .Take(limit > 0 ? limit : int.MaxValue)
+                        .Select((node, i) => new XmlInputRecord(node, i)),
+                    output,
+                    encoding);
+
+            }
+        }
+
         public void Process(Stream input, Stream output, Encoding encoding, int limit = 0)
         {
             Debug.WriteLine($"Processing input...");
@@ -808,47 +902,11 @@ namespace Octagon.Formatik
             switch (InputFormat)
             {
                 case InputFormat.JSON:
-                    var serializer = new JsonSerializer();
-                    var lines = new List<string>();
+                    ProcessJSON(input, output, encoding, limit);
+                    break;
 
-                    using (var sr = new StreamReader(input, encoding, false, 1024, true))
-                    {
-                        var line = sr.ReadLine();
-                        while (line != null && limit == 0 || lines.Count <= limit)
-                        {
-                            lines.Add(line);
-                            line = sr.ReadLine();
-                        }
-                    }
-
-                    input.Seek(0, SeekOrigin.Begin);
-
-                    using (var sr = new StreamReader(input, encoding))
-                    {
-                        using (var jsonTextReader = new JsonTextReader(sr))
-                        {
-                            JArray records;
-
-                            if (RecordsArrayPath == "")
-                            {
-                                records = JArray.Load(jsonTextReader, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore });
-                            }
-                            else
-                            {
-                                var document = (JToken)JToken.Load(jsonTextReader, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore });
-                                records = string.IsNullOrEmpty(RecordsArrayPath) ?
-                                    (JArray)document :
-                                    (JArray)((JObject)document).SelectToken(RecordsArrayPath);
-                            }
-
-                            Process(
-                                records
-                                    .Take(limit > 0 ? limit : int.MaxValue)
-                                    .Select((jRecord, i) => new JsonInputRecord((JObject)jRecord, i, lines)),
-                                output,
-                                encoding);
-                        }
-                    }
+                case InputFormat.XML:
+                    ProcessXML(input, output, encoding, limit);
                     break;
 
                 default:
