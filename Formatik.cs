@@ -13,6 +13,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 using System.Xml.XPath;
+using CsvHelper;
+using CsvHelper.Configuration;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Linq;
@@ -691,83 +693,38 @@ namespace Octagon.Formatik
                 .TakeWhile(row => !tokens.Any(token => row.Contains(token))));
         }
 
-        /// <summary>
-        /// Finds the largest record array and assumes its the records array
-        /// </summary>
-        /// <param name="input"></param>
-        /// <returns></returns>
-        private static void FindRecordArray(JToken obj, ref JArray largestArray)
-        {
-            if (obj.Type == JTokenType.Array &&
-                ((JArray)obj).Count() >= 3 &&
-                (largestArray == null || ((JArray)obj).Count() > largestArray.Count()))
-            {
-                largestArray = (JArray)obj;
-            }
-            else
-                foreach (var prop in ((JObject)obj).Properties())
-                    FindRecordArray(prop.Value, ref largestArray);
-        }
-
-        private static void FindRecordNode(XElement node, ref XElement largestNode)
-        {
-            if (node.Elements().Take(3).Count() == 3 &&
-                (largestNode == null || node.Elements().Count() > largestNode.Elements().Count()))
-            {
-                largestNode = node;
-            }
-            else
-                foreach (var child in node.Elements())
-                    FindRecordNode(child, ref largestNode);
-        }
-
-
         private IEnumerable<IInputRecord> GetRecords(int limit = 0)
         {
-            // Classical valid JSON document
-            if (Regex.IsMatch(Input, "^(/\\*([^*]|[\r\n]|(\\*+([^*/]|[\r\n])))*\\*+/)|(//.*)*[{\\[]", RegexOptions.IgnoreCase & RegexOptions.Multiline))
+            var inputParse = JsonInput.Factory().TryParse(Input, limit);
+            if (inputParse.Records != null)
             {
                 InputFormat = InputFormat.JSON;
-
-                JArray records = null;
-                string[] lines = null;
-
-                Parallel.Invoke(
-                    () =>
-                    {
-                        FindRecordArray(
-                            JToken.Parse(Input, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore }),
-                            ref records);
-                    },
-                    () =>
-                    {
-                        lines = Input.Split(new string[] { "\r\n", "\n" }, StringSplitOptions.None);
-                    }
-                );
-
-                if (records == null)
-                    throw new FormatikException("Unable to find a potential array of records in the JSON document");
-
-                RecordsArrayPath = records.Path;
-
-                return records
-                    .Select((rec, i) => new JsonInputRecord((JObject)rec, i, lines))
-                    .Take(limit > 0 ? limit : int.MaxValue)
-                    .ToArray();
+                RecordsArrayPath = inputParse.RecordsArrayPath;
+                return inputParse.Records;
             }
-            else if (Regex.IsMatch(Input, "^<\\?xml"))
+
+            inputParse = XmlInput.Factory().TryParse(Input, limit);
+            if (inputParse.Records != null)
             {
                 InputFormat = InputFormat.XML;
+                RecordsArrayPath = inputParse.RecordsArrayPath;
+                return inputParse.Records;
+            }
 
-                var doc = XDocument.Parse(Input);
+            inputParse = CsvInput.Factory().TryParse(Input, limit);
+            if (inputParse.Records != null)
+            {
+                InputFormat = InputFormat.CSV;
+                RecordsArrayPath = inputParse.RecordsArrayPath;
+                return inputParse.Records;
+            }
 
-                XElement recordsNode = null;
-                FindRecordNode(doc.Root, ref recordsNode);
-
-                return recordsNode.Elements()
-                    .Select((rec, i) => new XmlInputRecord(rec, i))
-                    .Take(limit > 0 ? limit : int.MaxValue)
-                    .ToArray();
+            inputParse = TsvInput.Factory().TryParse(Input, limit);
+            if (inputParse.Records != null)
+            {
+                InputFormat = InputFormat.TSV;
+                RecordsArrayPath = inputParse.RecordsArrayPath;
+                return inputParse.Records;
             }
 
             throw new FormatikException("Unable to detect input format.");
@@ -828,90 +785,40 @@ namespace Octagon.Formatik
             }
         }
 
-        private void ProcessJSON(Stream input, Stream output, Encoding encoding, int limit = 0)
-        {
-            var serializer = new JsonSerializer();
-            var lines = new List<string>();
-
-            using (var sr = new StreamReader(input, encoding, false, 1024, true))
-            {
-                var line = sr.ReadLine();
-                while (line != null && limit == 0 || lines.Count <= limit)
-                {
-                    lines.Add(line);
-                    line = sr.ReadLine();
-                }
-            }
-
-            input.Seek(0, SeekOrigin.Begin);
-
-            using (var sr = new StreamReader(input, encoding))
-            {
-                using (var jsonTextReader = new JsonTextReader(sr))
-                {
-                    JArray records;
-
-                    if (string.IsNullOrEmpty(RecordsArrayPath))
-                    {
-                        records = JArray.Load(jsonTextReader, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore });
-                    }
-                    else
-                    {
-                        var document = (JToken)JToken.Load(jsonTextReader, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore });
-                        records = string.IsNullOrEmpty(RecordsArrayPath) ?
-                            (JArray)document :
-                            (JArray)((JObject)document).SelectToken(RecordsArrayPath);
-                    }
-
-                    Process(
-                        records
-                            .Take(limit > 0 ? limit : int.MaxValue)
-                            .Select((jRecord, i) => new JsonInputRecord((JObject)jRecord, i, lines)),
-                        output,
-                        encoding);
-                }
-            }
-        }
-
-        private void ProcessXML(Stream input, Stream output, Encoding encoding, int limit = 0)
-        {
-            using (var reader = new StreamReader(input, encoding))
-            {
-                var document = XDocument.Load(reader);
-
-                var records = string.IsNullOrEmpty(RecordsArrayPath) ? 
-                    document.Root :
-                    document.Root.XPathSelectElement(RecordsArrayPath);
-
-                Process(
-                    records.Elements()
-                        .Take(limit > 0 ? limit : int.MaxValue)
-                        .Select((node, i) => new XmlInputRecord(node, i)),
-                    output,
-                    encoding);
-
-            }
-        }
-
         public void Process(Stream input, Stream output, Encoding encoding, int limit = 0)
         {
             Debug.WriteLine($"Processing input...");
             var processTimer = new Stopwatch();
             processTimer.Start();
 
+            Input inputProcessor;
+
             switch (InputFormat)
             {
                 case InputFormat.JSON:
-                    ProcessJSON(input, output, encoding, limit);
+                    inputProcessor = JsonInput.Factory();
                     break;
 
                 case InputFormat.XML:
-                    ProcessXML(input, output, encoding, limit);
+                    inputProcessor = XmlInput.Factory();
+                    break;
+
+                case InputFormat.CSV:
+                    inputProcessor = CsvInput.Factory();
+                    break;
+
+                case InputFormat.TSV:
+                    inputProcessor = TsvInput.Factory();
                     break;
 
                 default:
                     throw new NotImplementedException($"Formating from {InputFormat} not implemented yet");
             }
+
+            Process(
+                inputProcessor.TryParse(input, encoding, RecordsArrayPath, limit),
+                output,
+                encoding);
 
             processTimer.Stop();
             Debug.WriteLine($"done in {(int)processTimer.Elapsed.TotalMilliseconds}ms");

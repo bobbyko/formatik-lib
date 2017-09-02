@@ -62,33 +62,6 @@ namespace Octagon.Formatik
                 return null;                
         }
 
-        private static IEnumerable<string> GetFieldSelectors(JToken jToken, string token)
-        {
-            var result = new List<string>();
-            
-            switch (jToken.Type)
-            {
-                case JTokenType.Array:
-                    return ((JArray)jToken)
-                        .SelectMany(item => GetFieldSelectors(item, token));
-
-                case JTokenType.Object:
-                    return ((JObject)jToken).Properties()
-                        .SelectMany(prop => GetFieldSelectors(prop.Value, token));
-
-                default:
-                    return
-                        jToken.Value<string>() == token ?
-                            new string[] { jToken.Path } :
-                            emptyStringArray;
-            }
-        }
-
-        public IEnumerable<string> GetFieldSelectors(string token)
-        {
-            return GetFieldSelectors(document, token);
-        }
-
         private int index;
 
         private IEnumerable<Token> GetTokens(JToken jToken)

@@ -18,7 +18,7 @@ namespace Octagon.Formatik
 
         public int Index { get; }
 
-        private string GetXPath(XElement element)
+        public string GetXPath(XElement element)
         {
             if (element == null)
             {
@@ -109,49 +109,6 @@ namespace Octagon.Formatik
             else
                 throw new FormatikException($"[{this.GetType().Name}] Unrecognized token selector '{tokenSelector}'");
         }
-
-        // private static IEnumerable<string> GetFieldSelectors(XObject node, string token)
-        // {
-        //     var result = new List<string>();
-
-        //     if (node is XElement)
-        //     {
-        //         var element = (XElement)node;
-        //         var selectors = new List<string>();
-
-        //         if (element.Attributes().Any())
-        //         {
-        //             return element.Attributes()
-        //                 .SelectMany(item => GetFieldSelectors(item, token));
-        //         }
-
-        //         if (element.Nodes().Any())
-        //         {
-        //             return element.Nodes()
-        //                 .SelectMany(item => GetFieldSelectors(item, token));
-        //         }
-        //         else
-        //         {
-        //             return node.InnerText == token ?
-        //                 new string[] { node.ToXPathNavigable().ToString() } :
-        //                 emptyStringArray;
-        //         }
-        //     }
-        //     else if (node is XmlAttribute)
-        //     {
-        //         var val = ((XmlAttribute)node).Value;
-        //         return val == token ?
-        //             new string[] { val } :
-        //             emptyStringArray;
-        //     }
-        //     else
-        //         return emptyStringArray;
-        // }
-
-        // public IEnumerable<string> GetFieldSelectors(string token)
-        // {
-        //     return GetFieldSelectors(element, token);
-        // }
 
         private int index;
 
