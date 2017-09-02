@@ -67,7 +67,9 @@ namespace Octagon.Formatik
                         .Select((rec, i) => new XmlInputRecord(rec, i))
                         .Take(limit > 0 ? limit : int.MaxValue)
                         .ToArray(),
-                    "//" + dummyRec.GetXPath(recordsNode)
+                    recordsNode != recordsNode.Document.Root ? 
+                        "//" + dummyRec.GetXPath(recordsNode) : 
+                        null
                 );
             }
 
