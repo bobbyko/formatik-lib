@@ -179,6 +179,20 @@ namespace Octagon.Formatik
             Cardinality = cardinality;
         }
 
+        private static int GetMeanTokenCount(IEnumerable<IInputRecord> records)
+        {
+            var a = records.Select(rec => rec.GetTokens().Count()).ToArray();
+
+            return records != null && records.Any() ? 
+                records
+                    .Select(rec => rec.GetTokens().Count())
+                    .GroupBy(n => n)
+                    .OrderByDescending(g => g.Key)
+                    .First()
+                    .Key :
+                0;
+        }
+
         /// <summary>
         /// Returns an unused character that can be used as a placeholder
         /// </summary>
@@ -482,7 +496,8 @@ namespace Octagon.Formatik
                                 valueSetKey = string.Join("", valueSet.Distinct());
                             }
 
-                            deadends.Add(valueSetKey, new { Resedue = nextResedue, RecordSubset = nextSortedRecordSubset });
+                            if (!deadends.ContainsKey(valueSetKey))
+                                deadends.Add(valueSetKey, new { Resedue = nextResedue, RecordSubset = nextSortedRecordSubset });
                         }
                     }
                 }
@@ -711,20 +726,35 @@ namespace Octagon.Formatik
                 return inputParse.Records;
             }
 
-            inputParse = CsvInput.Factory().TryParse(Input, limit);
-            if (inputParse.Records != null)
+            (IEnumerable<IInputRecord> Records, string RecordsArrayPath) csvRecords = (null, null), 
+                                                                         tsvRecords = (null, null);
+            int csvMeanFieldCount = 0,
+                tsvMeanFieldCount = 0;
+
+            Parallel.Invoke(
+                () => {
+                    csvRecords = CsvInput.Factory().TryParse(Input, limit);
+                    csvMeanFieldCount = GetMeanTokenCount(csvRecords.Records);
+                },
+
+                () => {
+                    tsvRecords = TsvInput.Factory().TryParse(Input, limit);
+                    tsvMeanFieldCount = GetMeanTokenCount(tsvRecords.Records);
+                }
+            );
+
+            if (csvMeanFieldCount > 0 && csvMeanFieldCount >= tsvMeanFieldCount)
             {
                 InputFormat = InputFormat.CSV;
-                RecordsArrayPath = inputParse.RecordsArrayPath;
-                return inputParse.Records;
+                RecordsArrayPath = csvRecords.RecordsArrayPath;
+                return csvRecords.Records;
             }
 
-            inputParse = TsvInput.Factory().TryParse(Input, limit);
-            if (inputParse.Records != null)
+            if (tsvMeanFieldCount > 0 && tsvMeanFieldCount > csvMeanFieldCount)
             {
                 InputFormat = InputFormat.TSV;
-                RecordsArrayPath = inputParse.RecordsArrayPath;
-                return inputParse.Records;
+                RecordsArrayPath = tsvRecords.RecordsArrayPath;
+                return tsvRecords.Records;
             }
 
             throw new FormatikException("Unable to detect input format.");
