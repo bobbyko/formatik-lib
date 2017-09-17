@@ -183,7 +183,7 @@ namespace Octagon.Formatik
         {
             var a = records.Select(rec => rec.GetTokens().Count()).ToArray();
 
-            return records != null && records.Any() ? 
+            return records != null && records.Any() ?
                 records
                     .Select(rec => rec.GetTokens().Count())
                     .GroupBy(n => n)
@@ -261,6 +261,7 @@ namespace Octagon.Formatik
             {
                 var _1stOrderSeparator =
                     _1stOrderSeparators
+                        // ignre already discarded separators
                         .Except(excluded1stOrderSeparators)
                         .OrderByDescending(sep => sep.Length)
                         .ThenByDescending(sep => sep.ToCharArray().Sum(c =>
@@ -276,86 +277,93 @@ namespace Octagon.Formatik
 
                 separators = new List<string>() { _1stOrderSeparator };
 
-                var splitMarkup = markup.Split(new string[] { _1stOrderSeparator }, StringSplitOptions.None);
-                var splitExample = Example.Split(new string[] { _1stOrderSeparator }, StringSplitOptions.None);
-                var records = splitExample
-                    .Select((rec, i) => new { Record = rec, SplitMarkup = splitMarkup[i] })
-                    .ToArray();
+                var recordTokenCardinality = tokenizedInput
+                    .GroupBy(group => group.Count())
+                    .Where(distGroup => distGroup.Count() >= Cardinality)
+                    .Max(distGroup => distGroup.Key);
 
-                if (splitMarkup.Any(recMarkup => recMarkup != ExamplePlaceholder))
+                if (recordTokenCardinality > 1)
                 {
-                    // find 2nd order separators
-                    l = markup.Length;
-                    var _2stOrderSeparators = new List<string>();
-                    var recordTokenCardinality = tokenizedInput
-                        .GroupBy(group => group.Count())
-                        .Where(distGroup => distGroup.Count() >= Cardinality)
-                        .Max(distGroup => distGroup.Key);
 
-                    var excluded2ndOrderSeparators = new List<string>();
+                    var splitMarkup = markup.Split(new string[] { _1stOrderSeparator }, StringSplitOptions.None);
+                    var splitExample = Example.Split(new string[] { _1stOrderSeparator }, StringSplitOptions.None);
+                    var records = splitExample
+                        .Select((rec, i) => new { Record = rec, SplitMarkup = splitMarkup[i] })
+                        .ToArray();
 
-                    for (var sl = 1; sl < l - 1; sl++)
+                    if (splitMarkup.Any(recMarkup => recMarkup != ExamplePlaceholder))
                     {
-                        foreach (var record in records)
+                        // find 2nd order separators
+                        l = markup.Length;
+                        var _2stOrderSeparators = new List<string>();
+
+                        var excluded2ndOrderSeparators = new List<string>();
+
+                        for (var sl = 1; sl < l - 1; sl++)
                         {
-                            foreach (var separator in record.SplitMarkup.ToCharArray()
-                                .Where((c, i) => i < l - sl)
-                                .Select((c, i) => new String(markup.Skip(i).Take((int)sl).ToArray()))
-                                .Where(sep => !sep.Contains(ExamplePlaceholder))
-                                .GroupBy(sep => sep)
-                                .Select(g => g.Key)
-                                .Where(sep => record.Record
-                                    .Split(new string[] { sep }, StringSplitOptions.None)
-                                    .Count(potentialToken => tokenizedInput
-                                        .Any(tokenRow => tokenRow
-                                            .Any(token => MismatchFactor(potentialToken, token.Value) < 1)
-                                    )) == recordTokenCardinality))
+                            foreach (var record in records)
                             {
-                                _2stOrderSeparators.Add(separator);
-                            }
-                        }
-                    };
-
-                    do
-                    {
-                        var _2stOrderSeparator =
-                            _2stOrderSeparators
-                                .Except(excluded2ndOrderSeparators)
-                                .Distinct()
-                                .OrderByDescending(sep => sep.Length)
-                                .ThenByDescending(sep => sep.ToCharArray().Sum(c =>
+                                foreach (var separator in record.SplitMarkup.ToCharArray()
+                                    .Where((c, i) => i < l - sl)
+                                    .Select((c, i) => new String(markup.Skip(i).Take((int)sl).ToArray()))
+                                    .Where(sep => !sep.Contains(ExamplePlaceholder))
+                                    .GroupBy(sep => sep)
+                                    .Select(g => g.Key)
+                                    .Where(sep => record.Record
+                                        .Split(new string[] { sep }, StringSplitOptions.None)
+                                        .Count(potentialToken => tokenizedInput
+                                            .Any(tokenRow => tokenRow
+                                                .Any(token => MismatchFactor(potentialToken, token.Value) < 1)
+                                        )) == recordTokenCardinality))
                                 {
-                                    return markupCharWeights.TryGetValue(c, out var weight) ?
-                                        weight :
-                                        0;
-                                }))
-                                .FirstOrDefault();
+                                    _2stOrderSeparators.Add(separator);
+                                }
+                            }
+                        };
 
-                        if (_2stOrderSeparator == null)
+                        do
                         {
-                            excluded1stOrderSeparators.Add(_1stOrderSeparator);
-                            break;  // ran out of 2nd order separators to try, exit inner loop and try another 1st order separator
+                            var _2stOrderSeparator =
+                                _2stOrderSeparators
+                                    .Except(excluded2ndOrderSeparators)
+                                    .Distinct()
+                                    .OrderByDescending(sep => sep.Length)
+                                    .ThenByDescending(sep => sep.ToCharArray().Sum(c =>
+                                    {
+                                        return markupCharWeights.TryGetValue(c, out var weight) ?
+                                            weight :
+                                            0;
+                                    }))
+                                    .FirstOrDefault();
+
+                            if (_2stOrderSeparator == null)
+                            {
+                                excluded1stOrderSeparators.Add(_1stOrderSeparator);
+                                break;  // ran out of 2nd order separators to try, exit inner loop and try another 1st order separator
+                            }
+
+                            separators.Add(_2stOrderSeparator);
+
+                            if (!ValidateSeparators(tokens, separators))
+                            {
+                                excluded2ndOrderSeparators.Add(_2stOrderSeparator);
+                                separators.RemoveAt(1);
+                            }
+                            else
+                                return separators;
                         }
-
-                        separators.Add(_2stOrderSeparator);
-
+                        while (true);
+                    }
+                    else
+                    {
                         if (!ValidateSeparators(tokens, separators))
-                        {
-                            excluded2ndOrderSeparators.Add(_2stOrderSeparator);
-                            separators.RemoveAt(1);
-                        }
+                            excluded1stOrderSeparators.Add(_1stOrderSeparator);
                         else
                             return separators;
                     }
-                    while (true);
                 }
                 else
-                {
-                    if (!ValidateSeparators(tokens, separators))
-                        excluded1stOrderSeparators.Add(_1stOrderSeparator);
-                    else
-                        return separators;
-                }
+                    return separators;
             }
             while (true);
         }
@@ -588,7 +596,35 @@ namespace Octagon.Formatik
 
         private Boolean ValidateSeparators(IEnumerable<Token> tokens, IEnumerable<string> separators)
         {
+            // 1st and second order separators cannot be substrings of each other
+            if (separators.Count() == 2)
+            {
+                var _1stOrderSeparator = separators.First();
+                var _2stOrderSeparator = separators.Skip(1).First();
+
+                if (_1stOrderSeparator.Contains(_2stOrderSeparator) || _2stOrderSeparator.Contains(_1stOrderSeparator))
+                    return false;
+            }
+
             var table = GetTable(separators);
+
+            // Valid separators should not result in blank values
+            if (table.Any(row => row.Any(value => value == "")))
+                return false;
+
+            // table must be rectangular. However there could be header and/or footer values as first and last
+            var rowCount = table.Count();
+            if ((rowCount < 3) || (rowCount > 5) ||
+                (rowCount == 3 && table.Select(row => row.Length).Min() != table.Select(row => row.Length).Max()) ||
+                (rowCount == 4 && (
+                    table.Skip(1).Select(row => row.Length).Min() != table.Select(row => row.Length).Max() ||
+                    table.Take(3).Select(row => row.Length).Min() != table.Select(row => row.Length).Max())
+                ) ||
+                (rowCount == 5 && (table.Skip(1).Take(3).Select(row => row.Length).Min() != table.Select(row => row.Length).Max())))
+            {
+                return false;
+            }
+
             var tokenValuesByRecord = tokens
                 .SelectMany(token => token.Values)
                 .GroupBy(value => value.Record.Index)
@@ -726,18 +762,20 @@ namespace Octagon.Formatik
                 return inputParse.Records;
             }
 
-            (IEnumerable<IInputRecord> Records, string RecordsArrayPath) csvRecords = (null, null), 
+            (IEnumerable<IInputRecord> Records, string RecordsArrayPath) csvRecords = (null, null),
                                                                          tsvRecords = (null, null);
             int csvMeanFieldCount = 0,
                 tsvMeanFieldCount = 0;
 
             Parallel.Invoke(
-                () => {
+                () =>
+                {
                     csvRecords = CsvInput.Factory().TryParse(Input, limit);
                     csvMeanFieldCount = GetMeanTokenCount(csvRecords.Records);
                 },
 
-                () => {
+                () =>
+                {
                     tsvRecords = TsvInput.Factory().TryParse(Input, limit);
                     tsvMeanFieldCount = GetMeanTokenCount(tsvRecords.Records);
                 }
