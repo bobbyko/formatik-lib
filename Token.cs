@@ -33,9 +33,6 @@ namespace Octagon.Formatik
             if (sampleRecord == null)
                 throw new ArgumentNullException("sampleRecord");
 
-            if (string.IsNullOrEmpty(sampleValue))
-                throw new ArgumentException("sampleValue cannot be null or empty string");
-
             this.Values = new TokenValue[] {
                 new TokenValue(sampleValue, sampleRecord, this)
             };

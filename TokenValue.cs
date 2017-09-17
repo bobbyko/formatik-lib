@@ -23,9 +23,6 @@ namespace Octagon.Formatik
 
         public TokenValue(string value, IInputRecord record, Token token)
         {
-            if (string.IsNullOrEmpty(value))
-                throw new ArgumentNullException("value");
-
             if (record == null)
                 throw new ArgumentNullException("record");
 
