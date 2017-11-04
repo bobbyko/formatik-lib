@@ -1,11 +1,17 @@
-#Formatik v0.1 Specifications and Details
+#Formatik v1.0 Specifications and Details
 
 Formatik
 
 
 ## Input Assumptions and Restrictions
-1. Must be a valid List, CSV, JSON, XML or HTML
-2. Must have more 3 or more records.
+1. Must be a valid, supported format:
+	1. List - each line is a single value
+	2. CSV - comma or tab seperated values; each record spans a single line
+	3. JSON - single, valid JOSN document
+	4. XML - single valid XML dcument
+	5. HTML (not yet supported)
+	6. JSON records (not yet supported) - individually valid documents stringed together by commas and/or line feeds
+2. Must have 3 or more records.
 3. Must contain all the 3 records which are provided in the output example
 
 ## Example Assumptions and Restrictions

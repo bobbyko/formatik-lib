@@ -2,16 +2,16 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <PackageId>Octagon.Formatik</PackageId>
-    <TargetFramework>netcoreapp1.1</TargetFramework>
-    <RuntimeFrameworkVersion>1.1.2</RuntimeFrameworkVersion>
-    <Version>0.1</Version>
+    <TargetFramework>netcoreapp2.0</TargetFramework>
+    <RuntimeFrameworkVersion>2.0.0</RuntimeFrameworkVersion>
+    <Version>1.1</Version>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>Octagon.Formatik</RootNamespace>
     <AssemblyName>Octagon.Formatik</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="10.0.3"/>
-    <PackageReference Include="CsvHelper" Version="3.0.0-chi06"/>
+    <PackageReference Include="CsvHelper" Version="5.0.0.1"/>
     <PackageReference Include="System.Reflection" Version="4.3.0"/>
     <PackageReference Include="System.ValueTuple" Version="4.4.0"/>
     <PackageReference Include="System.Xml.XDocument" Version="4.3.0"/>

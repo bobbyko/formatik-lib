@@ -34,7 +34,7 @@ namespace Octagon.Formatik
         {
             try
             {
-                using (var parser = new CsvParser(reader, new CsvConfiguration() { Delimiter = GetDelimiter(), ThrowOnBadData = true }))
+                using (var parser = new CsvParser(reader, new Configuration() { Delimiter = GetDelimiter(), DetectColumnCountChanges = true }))
                 {
                     var records = new List<string[]>();
                     while (true)
