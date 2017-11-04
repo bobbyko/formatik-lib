@@ -164,7 +164,24 @@ namespace Octagon.Formatik
             ExampleHash = GetRepeatableHashCode(example);
             ExamplePlaceholder = GetUnusedCharacter(example);
 
-            Evaluate();
+            // for performance reasons evaluate using a subset, starting from 10 and increasing 10x if evaluation exceptions were found
+            var setSize = 10;
+            
+            while (setSize <= MaxInputRecords)
+            {
+                try
+                {
+                    Evaluate(setSize);
+                    return;     // success
+                }
+                catch (FormatikException e)
+                {
+                    if (setSize < MaxInputRecords)
+                        setSize = setSize * 10 <= MaxInputRecords ? setSize * 10 : MaxInputRecords;
+                    else
+                        throw e;
+                }
+            }
         }
 
         protected Formatik(string header, string footer, string input, string example, string examplePlaceholder, int cardinality)
@@ -798,9 +815,9 @@ namespace Octagon.Formatik
             throw new FormatikException("Unable to detect input format.");
         }
 
-        protected void Evaluate()
+        protected void Evaluate(int inputSetSize)
         {
-            var inputRecords = GetRecords(MaxInputRecords);
+            var inputRecords = GetRecords(inputSetSize);
 
             var rawTokens = GetTokens(inputRecords);
 
@@ -834,7 +851,7 @@ namespace Octagon.Formatik
             this.Footer = footerStartAt > 0 ? Example.Substring(footerStartAt) : string.Empty;
         }
 
-        public string Process(string input, Encoding encoding, int limit = 0)
+        public (string output, int processed) Process(string input, Encoding encoding, int limit = 0)
         {
             byte[] byteArray = encoding.GetBytes(input);
 
@@ -842,18 +859,21 @@ namespace Octagon.Formatik
             {
                 using (var outputStream = new MemoryStream())
                 {
-                    Process(inputStream, outputStream, encoding, limit);
+                    var processed = Process(inputStream, outputStream, encoding, limit);
 
                     outputStream.Seek(0, SeekOrigin.Begin);
                     using (var reader = new StreamReader(outputStream))
                     {
-                        return reader.ReadToEnd();
+                        return (
+                            output: reader.ReadToEnd(),
+                            processed: processed
+                        );
                     }
                 }
             }
         }
 
-        public void Process(Stream input, Stream output, Encoding encoding, int limit = 0)
+        public int Process(Stream input, Stream output, Encoding encoding, int limit = 0)
         {
             Debug.WriteLine($"Processing input...");
             var processTimer = new Stopwatch();
@@ -883,18 +903,21 @@ namespace Octagon.Formatik
                     throw new NotImplementedException($"Formating from {InputFormat} not implemented yet");
             }
 
-            Process(
+            var processed = Process(
                 inputProcessor.TryParse(input, encoding, RecordsArrayPath, limit),
                 output,
                 encoding);
 
             processTimer.Stop();
             Debug.WriteLine($"done in {(int)processTimer.Elapsed.TotalMilliseconds}ms");
+
+            return processed;
         }
 
-        private void Process(IEnumerable<IInputRecord> records, Stream output, Encoding encoding)
+        private int Process(IEnumerable<IInputRecord> records, Stream output, Encoding encoding)
         {
-            using (var writer = new StreamWriter(output, encoding, 1024, true))
+            var processed = 0;
+            using (var writer = new StreamWriter(output, encoding, 8192, true))
             {
                 if (!string.IsNullOrEmpty(Header))
                     writer.Write(Header);
@@ -911,11 +934,15 @@ namespace Octagon.Formatik
 
                     writer.Write(String.Join(_2ndOrderSeparator,
                         Tokens.Select(token => token.GetOutput(record))));
+
+                    processed++;
                 }
 
                 if (!string.IsNullOrEmpty(Footer))
                     writer.Write(Footer);
             }
+
+            return processed;
         }
 
         public static unsafe int GetRepeatableHashCode(string s)

@@ -44,7 +44,7 @@ namespace Octagon.Formatik
             var serializer = new JsonSerializer();
             var lines = new List<string>();
 
-            using (var sr = new StreamReader(input, encoding, false, 1024, true))
+            using (var sr = new StreamReader(input, encoding, false, 8192, true))
             {
                 var line = sr.ReadLine();
                 while (line != null && limit == 0 || lines.Count <= limit)
