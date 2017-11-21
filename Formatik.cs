@@ -123,8 +123,9 @@ namespace Octagon.Formatik
         public IEnumerable<string> Separators { get; set; }
 
         public string Input { get; set; }
-
         public int InputHash { get; set; }
+        public int InputSize { get; set; }
+        public int InputRecords { get; set; }
 
         public string Example { get; set; }
 
@@ -818,6 +819,7 @@ namespace Octagon.Formatik
         protected void Evaluate(int inputSetSize)
         {
             var inputRecords = GetRecords(inputSetSize);
+            InputRecords = inputRecords.Count();
 
             var rawTokens = GetTokens(inputRecords);
 
@@ -1010,6 +1012,15 @@ namespace Octagon.Formatik
                 )
                 .Select(hash => hash == 0 ? 1 : hash)
                 .Aggregate((final, hash) => unchecked(final * hash));
+        }
+
+        public static (InputFormat InputFormat, int Records) GetInputFormat(string input, int limit) {
+            var formatik = new Formatik() { Input = input };
+            var records = formatik.GetRecords(limit);
+            return (
+                InputFormat: formatik.InputFormat,
+                Records: records.Count()
+            );
         }
 
         #region IComparable
