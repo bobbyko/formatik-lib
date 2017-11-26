@@ -789,13 +789,15 @@ namespace Octagon.Formatik
                 () =>
                 {
                     csvRecords = CsvInput.Factory().TryParse(Input, limit);
-                    csvMeanFieldCount = GetMeanTokenCount(csvRecords.Records);
+                    if (csvRecords.Records != null)
+                        csvMeanFieldCount = GetMeanTokenCount(csvRecords.Records);
                 },
 
                 () =>
                 {
                     tsvRecords = TsvInput.Factory().TryParse(Input, limit);
-                    tsvMeanFieldCount = GetMeanTokenCount(tsvRecords.Records);
+                    if (tsvRecords.Records != null)
+                        tsvMeanFieldCount = GetMeanTokenCount(tsvRecords.Records);
                 }
             );
 
@@ -813,7 +815,7 @@ namespace Octagon.Formatik
                 return tsvRecords.Records;
             }
 
-            throw new FormatikException("Unable to detect input format.");
+            throw new UnsupportedFormatException("Unable to detect input format.");
         }
 
         protected void Evaluate(int inputSetSize)

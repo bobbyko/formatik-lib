@@ -93,9 +93,18 @@ namespace Octagon.Formatik
                 Parallel.Invoke(
                     () =>
                     {
-                        FindRecordArray(
-                            JToken.Parse(input, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore }),
-                            ref records);
+                        JToken json; 
+                        try
+                        {
+                            json = JToken.Parse(input, new JsonLoadSettings() { CommentHandling = CommentHandling.Ignore });
+                        }
+                        catch (JsonReaderException)
+                        {
+                            json = null;
+                        }
+
+                        if (json != null)
+                            FindRecordArray(json, ref records);
                     },
                     () =>
                     {
@@ -104,16 +113,19 @@ namespace Octagon.Formatik
                 );
 
                 if (records == null)
-                    throw new FormatikException("Unable to find a potential array of records in the JSON document");
+                    return (
+                        null,
+                        null
+                    );
+                else
+                    return (
+                        records
+                            .Take(limit > 0 ? limit : int.MaxValue)
+                            .Select((rec, i) => new JsonInputRecord((JObject)rec, i, lines))
+                            .ToArray(),
 
-                return (
-                    records
-                        .Take(limit > 0 ? limit : int.MaxValue)
-                        .Select((rec, i) => new JsonInputRecord((JObject)rec, i, lines))
-                        .ToArray(),
-
-                    records.Path
-                );
+                        records.Path
+                    );
             }
 
             return (null, null);
